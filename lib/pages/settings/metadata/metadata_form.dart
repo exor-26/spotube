@@ -24,6 +24,12 @@ class SettingsMetadataProviderFormPage extends HookConsumerWidget {
   Widget build(BuildContext context, ref) {
     final formKey = useMemoized(() => GlobalKey<FormBuilderState>(), []);
 
+    // Only the bundled ListenBrainz token form offers guest continuation.
+    // All other plugin forms preserve their current authentication flow.
+    final canSkipLogin = title.toLowerCase() == "listenbrainz login" &&
+        fields.any((field) =>
+            field is MetadataFormFieldInputObject && field.id == "token");
+
     return SafeArea(
       bottom: false,
       child: Scaffold(
@@ -116,22 +122,39 @@ class SettingsMetadataProviderFormPage extends HookConsumerWidget {
                   ),
                   const SliverGap(24),
                   SliverToBoxAdapter(
-                    child: Button.primary(
-                      onPressed: () {
-                        if (formKey.currentState?.saveAndValidate() != true) {
-                          return;
-                        }
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (canSkipLogin) ...[
+                          Button.secondary(
+                            onPressed: () {
+                              // Cancellation is already supported by the
+                              // plugin; this never creates fake credentials.
+                              context.router.maybePop();
+                            },
+                            child: Text(context.l10n.skip),
+                          ),
+                          const Gap(12),
+                        ],
+                        Button.primary(
+                          onPressed: () {
+                            if (formKey.currentState?.saveAndValidate() !=
+                                true) {
+                              return;
+                            }
 
-                        final data = formKey.currentState!.value.entries
-                            .map((e) => <String, dynamic>{
-                                  "id": e.key,
-                                  "value": e.value,
-                                })
-                            .toList();
+                            final data = formKey.currentState!.value.entries
+                                .map((e) => <String, dynamic>{
+                                      "id": e.key,
+                                      "value": e.value,
+                                    })
+                                .toList();
 
-                        context.router.maybePop(data);
-                      },
-                      child: Text(context.l10n.submit),
+                            context.router.maybePop(data);
+                          },
+                          child: Text(context.l10n.submit),
+                        ),
+                      ],
                     ),
                   ),
                   const SliverGap(200)

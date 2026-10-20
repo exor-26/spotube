@@ -6,6 +6,8 @@ import 'package:spotube/components/fallbacks/error_box.dart';
 import 'package:spotube/components/fallbacks/no_default_metadata_plugin.dart';
 import 'package:spotube/components/horizontal_playbutton_card_view/horizontal_playbutton_card_view.dart';
 import 'package:spotube/extensions/context.dart';
+import 'package:spotube/provider/metadata_plugin/core/auth.dart';
+import 'package:spotube/provider/metadata_plugin/metadata_plugin_provider.dart';
 import 'package:spotube/provider/metadata_plugin/browse/sections.dart';
 import 'package:spotube/provider/metadata_plugin/utils/common.dart';
 import 'package:spotube/services/metadata/errors/exceptions.dart';
@@ -17,6 +19,52 @@ class HomePageBrowseSection extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, ref) {
+    final pluginState = ref.watch(metadataPluginsProvider);
+    if (pluginState.isLoading) {
+      return const SliverToBoxAdapter(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final selectedMetadataPlugin =
+        pluginState.asData?.value.defaultMetadataPluginConfig;
+    final isBundledListenBrainz = selectedMetadataPlugin?.repository ==
+        "https://github.com/KRTirtho/spotube-plugin-musicbrainz-listenbrainz";
+    final authentication = ref.watch(metadataPluginAuthenticatedProvider);
+
+    // The bundled ListenBrainz browse endpoint uses account-specific URLs.
+    // Avoid requesting personalized sections without a username. Other
+    // plugins retain their own anonymous browsing behavior.
+    if (isBundledListenBrainz && authentication.asData?.value != true) {
+      if (authentication.isLoading) {
+        return const SliverToBoxAdapter(
+          child: Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(context.l10n.browse_anonymously),
+                const Gap(8),
+                Text(context.l10n.search_to_get_results),
+                const Gap(12),
+                Button.secondary(
+                  onPressed: () => context.navigateTo(const SearchRoute()),
+                  child: Text(context.l10n.search),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final browseSections = ref.watch(metadataPluginBrowseSectionsProvider);
     final sections = browseSections.asData?.value.items;
     final ThemeData(:colorScheme) = Theme.of(context);

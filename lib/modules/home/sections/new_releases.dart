@@ -16,12 +16,17 @@ class HomeNewReleasesSection extends HookConsumerWidget {
   Widget build(BuildContext context, ref) {
     final authenticated = ref.watch(metadataPluginAuthenticatedProvider);
 
+    // Home releases are already hidden when signed out. Don't request them
+    // in that state, as the bundled provider needs an account username.
+    if (authenticated.asData?.value != true) {
+      return const SizedBox.shrink();
+    }
+
     final newReleases = ref.watch(metadataPluginAlbumReleasesProvider);
     final newReleasesNotifier =
         ref.read(metadataPluginAlbumReleasesProvider.notifier);
 
-    if (authenticated.asData?.value != true ||
-        newReleases.isLoading ||
+    if (newReleases.isLoading ||
         newReleases.asData?.value.items.isEmpty == true) {
       return const SizedBox.shrink();
     }

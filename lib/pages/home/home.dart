@@ -66,6 +66,22 @@ class HomePage extends HookConsumerWidget {
                 )
               else if (kIsMacOS)
                 const SliverGap(10),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Button.secondary(
+                      leading: const Icon(SpotubeIcons.extensions),
+                      onPressed: () {
+                        context.pushRoute(const SettingsMetadataProviderRoute());
+                      },
+                      child: const Text("Setup"),
+                    ),
+                  ),
+                ),
+              ),
               const SliverGap(10),
               SliverList.builder(
                 itemCount: 3,
