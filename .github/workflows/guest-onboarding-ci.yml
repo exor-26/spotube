@@ -36,6 +36,8 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
       - name: Analyze Dart
         run: dart analyze --no-fatal-warnings
+      - name: Test headset multi-click grouping
+        run: flutter test test/services/audio_services/headset_click_sequence_test.dart
       - name: Check formatting of changed Dart files
         run: |
           dart format --output=none --set-exit-if-changed \
@@ -46,5 +48,6 @@ jobs:
             lib/pages/settings/metadata/metadata_form.dart \
             lib/provider/audio_player/audio_player_streams.dart \
             lib/services/audio_services/mobile_audio_service.dart \
-            lib/services/audio_services/origin_island_bridge.dart
+            lib/services/audio_services/origin_island_bridge.dart \
+            lib/services/audio_services/headset_click_sequence.dart
 

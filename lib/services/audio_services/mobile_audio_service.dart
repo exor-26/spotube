@@ -9,6 +9,7 @@ import 'package:spotube/provider/audio_player/state.dart';
 import 'package:spotube/services/audio_player/audio_player.dart';
 import 'package:spotube/services/audio_player/playback_state.dart';
 import 'package:spotube/services/audio_services/origin_island_bridge.dart';
+import 'package:spotube/services/audio_services/headset_click_sequence.dart';
 import 'package:spotube/services/logger/logger.dart';
 import 'package:spotube/utils/platform.dart';
 
@@ -20,11 +21,28 @@ class MobileAudioService extends BaseAudioHandler {
   DateTime? _lastPlaybackUpdate;
   DateTime? _lastIslandUpdate;
   bool _islandActive = false;
+  late final HeadsetClickSequence _headsetClicks;
 
   // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
   AudioPlayerState get playlist => audioPlayerNotifier.state;
 
   MobileAudioService(this.audioPlayerNotifier) {
+    _headsetClicks = HeadsetClickSequence(onSequence: (count) async {
+      if (!audioPlayer.hasSource) return;
+      switch (count) {
+        case 1:
+          if (audioPlayer.isPlaying) {
+            await pause();
+          } else {
+            await play();
+          }
+        case 2:
+          await skipToNext();
+        default:
+          await skipToPrevious();
+      }
+    });
+
     AudioSession.instance.then((s) {
       session = s;
       session?.configure(const AudioSessionConfiguration.music());
@@ -108,6 +126,23 @@ class MobileAudioService extends BaseAudioHandler {
 
   @override
   Future<void> pause() => audioPlayer.pause();
+
+  @override
+  Future<void> click([MediaButton button = MediaButton.media]) async {
+    // AudioService receives hardware media keys even with the display locked.
+    // Some earbuds emit explicit next/previous keys; wired headset buttons
+    // instead send consecutive media-key events that need disambiguation.
+    switch (button) {
+      case MediaButton.media:
+        _headsetClicks.register();
+      case MediaButton.next:
+        _headsetClicks.cancelPending();
+        if (audioPlayer.hasSource) await skipToNext();
+      case MediaButton.previous:
+        _headsetClicks.cancelPending();
+        if (audioPlayer.hasSource) await skipToPrevious();
+    }
+  }
 
   @override
   Future<void> seek(Duration position) async {
@@ -196,7 +231,9 @@ class MobileAudioService extends BaseAudioHandler {
     if (!kIsAndroid) return;
 
     final item = _activeMediaItem;
-    if (item == null || !audioPlayer.hasSource) {
+    // Only active playback is promoted; pausing keeps the standard
+    // MediaSession notification while removing the separate status chip.
+    if (item == null || !audioPlayer.hasSource || !audioPlayer.isPlaying) {
       if (_islandActive) {
         _islandActive = false;
         unawaited(OriginIslandBridge.clear());
