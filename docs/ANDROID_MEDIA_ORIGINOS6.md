@@ -1,71 +1,85 @@
-# Android media controls and OriginOS 6 — development notes
+# Spotube Android 16 / Vivo OriginOS 6 media integration
 
-Work-in-progress branch: `fix/android-media-origin-island`. No APK or release build is part of this branch's workflow.
+This experimental branch is for development **without APK builds or PRs**.
 
-## Notification seekbar
+## 1. Android media notification seekbar (independent)
 
-The media notification continues to use the existing `audio_service` Android
-MediaSession. These changes address the client-side contract:
+Spotube still uses `audio_service` and Android MediaSession for its media
+notification, seekbar, notification play/pause/next/previous and lock-screen
+controls. The implementation corrects asynchronous MediaItem initialization,
+refreshes metadata duration from the player, publishes requested seek
+positions, and throttles overly frequent playback-state updates.
 
-- Initialize the service asynchronously **without dropping** a playlist/metadata update.
-- Read active media from the actual MediaKit playlist event, not a potentially stale
-  Riverpod snapshot.
-- Publish MediaItem with a duration, then refresh it when the decoder reports
-  a more accurate duration.
-- Keep `MediaAction.seek` enabled and pass requested seek positions directly to
-  `audioPlayer.seek`; publish the resulting position immediately.
-- Distinguish buffering from initial loading and avoid flooding SystemUI with
-  per-frame playback-state updates.
+MediaSession controls must continue to work even if the Origin Island feature
+is unavailable. Network sources must independently support byte-range seek.
 
-This does not alter how JioSaavn or any other audio-source plugin resolves/streams
-the actual media. The remote server must still support seeking/range requests.
+## 2. Headset gestures on locked and unlocked screens
 
-## OriginOS 6 (Vivo / iQOO Android 16)
+AudioService routes media-button events from the headset / Bluetooth
+controls to `MobileAudioService.click()`:
+- A single generic media-button tap toggles play/pause after a 380 ms window.
+- Two quick taps select the next track.
+- Three quick taps select the previous track.
+- Headphones that emit distinct NEXT / PREVIOUS key codes skip immediately,
+  without grouping or delay.
+- Queued generic taps are cleared when an explicit Next/Previous event arrives.
 
-The native `OriginIslandNotifier` posts a **real Android notification** (not
-a window overlay) with the reverse-engineered Vivo `notification.superx.*`
-extras, title/artist, progress, and the app icon.
+Tests of click grouping live in
+`test/services/audio_services/headset_click_sequence_test.dart`.
 
-- Only activated for Vivo/iQOO builds with API level 36 or later.
-- Permission: `POST_NOTIFICATIONS`, requested once when needed for this separate
-  notification; denial leaves ordinary audio playback/MediaSession intact.
-- Standard media notification remains the source of truth for play/pause/seek.
-- Updates roughly every 5 seconds while playing; removes the island notification
-  when media is cleared / playback stops.
-- Uses a low-importance, silent, separate notification channel.
-- No changes to package identity, audio-source plugins, or system settings.
+This depends on Android delivering headset media keys to the active Spotube
+MediaSession. Earbuds that consume taps in proprietary firmware or assistant
+gestures may never emit those key events. Verify while the screen is locked.
 
-**Experimental status:** The SuperX protocol is **not a public Android or Vivo
-SDK**. ROM versions can ignore the extras or whitelist supported apps. We
-cannot assert that the Vivo T4 Ultra on OriginOS 6 will render the pill until
-it is tested on that actual device. It must not be described as verified support.
+## 3. Origin Island: native Vivo status chip, not playback seekbar
 
-Protocol documentation:
-https://github.com/cameleonnbss/originos-toolkit/blob/main/docs/ORIGINISLAND.md
+The implementation follows the **working CardBox reference**:
+`exor-26/CardBox/mobile/android/app/src/main/java/com/starwebx/cardbox/CardboxLiveUpdateManager.kt`.
 
-## Later real-device checks (do not build yet)
+- Uses Android 16's `Notification.ProgressStyle` and
+  `android.requestPromotedOngoing`, not the unverified SuperX-only payload.
+- Posts only on Vivo/iQOO devices with API level 36 or higher, and only while
+  music is actually playing.
+- Shows song title, artist, track progress and a compact remaining-time label.
+- Adds media actions routed to the existing `audio_service` MediaButtonReceiver.
+- Cancels the separate notification on pause, stop, or cleared track.
+- Requires `POST_NOTIFICATIONS` and declares
+  `POST_PROMOTED_NOTIFICATIONS` like CardBox.
+- Does not post a duplicate ordinary notification when the system reports
+  that promotion is not available.
+- Keeps the **standard MediaStyle notification and seekbar** independent.
 
-1. On Vivo T4 Ultra, verify Android 16 and OriginOS 6 build/version and
-   enable Origin Player / system media controls.
-2. Grant Spotube notification permission if requested. Check that both the
-   stock media control and optional Origin Island appear as intended.
-3. Select a JioSaavn audio source and play a known 3–5 minute track.
-4. Confirm notification metadata includes accurate duration and progress.
-5. Drag shade seekbar to 25%, 50%, and 75%; confirm actual audio jumps, both
-   while the app is foreground and background.
-6. Pause, resume, skip, seek backward, change track and clear queue. Check the
-   Origin Island track information and lifecycle each time.
-7. Restart Spotube and compare behavior with a locally stored track.
-8. Verify non-Vivo Android uses standard media notification only.
-9. Inspect `adb shell dumpsys media_session` for Spotube: metadata duration,
-   active session, position and `ACTION_SEEK_TO`.
-10. Inspect `adb shell dumpsys notification` and `adb logcat` for the Vivo
-    status notification if the island does not show. Confirm the system's
-    notification permissions and ROM app-eligibility policies.
+Unlike the CardBox booking/live travel case, a music status may face additional
+OriginOS eligibility or music-player whitelist rules; identical Spotify
+rendering is **not guaranteed**. The standard MediaSession may already be
+integrated by compatible OriginOS builds.
+
+Android reference:
+https://developer.android.com/develop/ui/views/notifications/live-update
+Music-player whitelist discussion:
+https://github.com/Moriafly/SaltPlayerSource/issues/1941
+
+## Test checklist for Vivo T4 Ultra, OriginOS 6 (later — no build yet)
+
+1. Start track while unlocked; grant notifications if prompted.
+2. Inspect standard notification: artwork, exact duration and seekbar.
+3. Seek to 25%, 50%, and 75% with screen unlocked and locked.
+4. Test wired/Bluetooth headset single/double/triple tap in background and
+   with screen locked; compare headphones that provide explicit media keys.
+5. Check Origin Island while playing, after pausing, on next/previous and
+   after stopping; verify no second ordinary shade notification.
+6. Tap Island notification to open Spotube, and use previous/pause/next
+   actions if shown by the ROM.
+7. If the status chip is missing, inspect
+   `adb logcat -s SpotubeOriginIsland` for the eligibility results and
+   check Vivo's Live Updates / Origin Island app permissions.
+8. Inspect `adb shell dumpsys media_session` for seek permission,
+   metadata duration, state and headset control events.
+9. Compare with CardBox live update on the same OS build.
+10. Verify non-Vivo Android receives only the standard MediaSession.
 
 ## Validation limits
 
-Dart analyzer and Dart formatter can be run by GitHub Actions without
-compiling an APK. Kotlin Android code and Vivo's closed-source rendering
-require a later Android build and device test; neither should be marked
-passed from static analysis alone.
+GitHub Actions validates Dart code and headset-sequence unit tests, without
+building an APK. Android Kotlin compilation and actual OriginOS rendering
+cannot be certified until the user authorizes an Android build/device test.
