@@ -75,7 +75,9 @@ class HomePage extends HookConsumerWidget {
                     child: Button.secondary(
                       leading: const Icon(SpotubeIcons.extensions),
                       onPressed: () {
-                        context.pushRoute(const SettingsMetadataProviderRoute());
+                        context.pushRoute(
+                          const SettingsMetadataProviderRoute(),
+                        );
                       },
                       child: const Text("Setup"),
                     ),
