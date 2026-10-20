@@ -43,5 +43,8 @@ jobs:
             lib/pages/home/home.dart \
             lib/modules/home/sections/sections.dart \
             lib/modules/home/sections/new_releases.dart \
-            lib/pages/settings/metadata/metadata_form.dart
+            lib/pages/settings/metadata/metadata_form.dart \
+            lib/provider/audio_player/audio_player_streams.dart \
+            lib/services/audio_services/mobile_audio_service.dart \
+            lib/services/audio_services/origin_island_bridge.dart
 
