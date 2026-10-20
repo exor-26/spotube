@@ -29,17 +29,21 @@ class MobileAudioService extends BaseAudioHandler {
   MobileAudioService(this.audioPlayerNotifier) {
     _headsetClicks = HeadsetClickSequence(onSequence: (count) async {
       if (!audioPlayer.hasSource) return;
-      switch (count) {
-        case 1:
-          if (audioPlayer.isPlaying) {
-            await pause();
-          } else {
-            await play();
-          }
-        case 2:
-          await skipToNext();
-        default:
-          await skipToPrevious();
+      try {
+        switch (count) {
+          case 1:
+            if (audioPlayer.isPlaying) {
+              await pause();
+            } else {
+              await play();
+            }
+          case 2:
+            await skipToNext();
+          default:
+            await skipToPrevious();
+        }
+      } catch (error, stack) {
+        AppLogger.reportError(error, stack);
       }
     });
 
@@ -181,6 +185,7 @@ class MobileAudioService extends BaseAudioHandler {
 
   @override
   Future<void> stop() async {
+    _headsetClicks.cancelPending();
     await audioPlayerNotifier.stop();
     _activeMediaItem = null;
     mediaItem.add(null);
@@ -201,6 +206,7 @@ class MobileAudioService extends BaseAudioHandler {
 
   @override
   Future<void> onTaskRemoved() async {
+    _headsetClicks.cancelPending();
     await OriginIslandBridge.clear();
     await audioPlayer.pause();
     if (kIsAndroid) exit(0);

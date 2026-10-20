@@ -84,11 +84,15 @@ class OriginIslandNotifier(private val activity: Activity) {
         ) {
             if (!permissionRequested) {
                 permissionRequested = true
-                ActivityCompat.requestPermissions(
-                    activity,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    PERMISSION_REQUEST,
-                )
+                runCatching {
+                    ActivityCompat.requestPermissions(
+                        activity,
+                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                        PERMISSION_REQUEST,
+                    )
+                }.onFailure {
+                    Log.w(TAG, "Cannot request notifications from background", it)
+                }
             }
             return
         }
