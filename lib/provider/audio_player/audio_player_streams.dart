@@ -19,10 +19,19 @@ import 'package:spotube/services/logger/logger.dart';
 
 class AudioPlayerStreamListeners {
   final Ref ref;
-  late final AudioServices notificationService;
+  late final Future<AudioServices> notificationServiceReady;
   AudioPlayerStreamListeners(this.ref) {
-    AudioServices.create(ref, ref.read(audioPlayerProvider.notifier)).then(
-      (value) => notificationService = value,
+    // Do not drop a track change while AudioService is initializing.
+    notificationServiceReady =
+        AudioServices.create(ref, ref.read(audioPlayerProvider.notifier)).then(
+      (service) async {
+        final playlist = audioPlayer.playlist;
+        final active = playlist.medias.elementAtOrNull(playlist.index);
+        if (active != null) {
+          await service.addTrack(SpotubeMedia.media(active).track);
+        }
+        return service;
+      },
     );
 
     final subscriptions = [
@@ -50,9 +59,19 @@ class AudioPlayerStreamListeners {
   StreamSubscription subscribeToPlaylist() {
     return audioPlayer.playlistStream.listen((mpvPlaylist) {
       try {
-        if (audioPlayerState.activeTrack == null) return;
-        notificationService.addTrack(audioPlayerState.activeTrack!);
-        discord.updatePresence(audioPlayerState.activeTrack!);
+        // The playback event may precede Riverpod's activeTrack update.
+        final active = mpvPlaylist.medias.elementAtOrNull(mpvPlaylist.index);
+        if (active == null) return;
+        final track = SpotubeMedia.media(active).track;
+
+        unawaited(
+          notificationServiceReady
+              .then((service) => service.addTrack(track))
+              .catchError((Object error, StackTrace stack) {
+            AppLogger.reportError(error, stack);
+          }),
+        );
+        discord.updatePresence(track);
       } catch (e, stack) {
         AppLogger.reportError(e, stack);
       }
