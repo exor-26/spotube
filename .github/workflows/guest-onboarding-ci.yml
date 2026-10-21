@@ -85,6 +85,13 @@ jobs:
           # rewrites a very large Flutter engine JAR and exhausts CI heap.
           # Keep this CI-only; do not change the checked-in Gradle settings.
           printf '\nandroid.enableJetifier=false\n' >> android/gradle.properties
+          # One old dependency brings support-compat 27.0.1, which duplicates
+          # AndroidX Core classes when Jetifier is disabled for CI.
+          cat >> android/app/build.gradle <<'GRADLE'
+          configurations.configureEach {
+              exclude group: 'com.android.support', module: 'support-compat'
+          }
+          GRADLE
           flutter build apk --debug --flavor dev --target lib/main.dart --no-pub --target-platform android-arm64
       - name: Verify APK signature and dev package ID
         run: |
