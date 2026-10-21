@@ -125,24 +125,5 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
-          script: |
-            set -e
-            APK=build/app/outputs/flutter-apk/app-dev-debug.apk
-            adb install -r "$APK"
-            adb logcat -c
-            # Original app ID plus upstream dev suffix; Kotlin activity remains
-            # in original unsuffixed oss.krtirtho.spotube namespace.
-            adb shell am start -W -n oss.krtirtho.spotube.dev/oss.krtirtho.spotube.MainActivity
-            sleep 25
-            if ! adb shell pidof oss.krtirtho.spotube.dev; then
-              echo "App process exited during startup:"
-              adb logcat -d -b crash | tail -n 150
-              exit 1
-            fi
-            if adb logcat -d -b crash | grep -A 5 -F "Process: oss.krtirtho.spotube.dev"; then
-              echo "Fatal Android crash detected during startup"
-              adb logcat -d -b crash | tail -n 150
-              exit 1
-            fi
-            echo "Original Spotube launcher survived the startup smoke test"
+          script: bash .github/scripts/android_startup_smoke.sh
 
