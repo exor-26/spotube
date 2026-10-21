@@ -112,37 +112,3 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  android-debug:
-    name: Signed Android dev APK
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-      - name: Development environment
-        run: |
-          printf 'ENABLE_UPDATE_CHECK=0\nLASTFM_API_KEY=xxx\nLASTFM_API_SECRET=xxx\nRELEASE_CHANNEL=nightly\nHIDE_DONATIONS=1\n' > .env
-      - name: Create temporary signing key
-        run: |
-          keytool -genkeypair -noprompt -keystore android/app/spotube-ci-test.jks -alias spotube-ci-test -keyalg RSA -keysize 2048 -validity 30 -storepass android-ci-test -keypass android-ci-test -dname 'CN=Spotube Test,O=Development,C=IN'
-          printf 'storePassword=android-ci-test\nkeyPassword=android-ci-test\nkeyAlias=spotube-ci-test\nstoreFile=spotube-ci-test.jks\n' > android/key.properties
-      - name: Install packages
-        run: flutter pub get
-      - name: Generate code
-        run: dart run build_runner build --delete-conflicting-outputs
-      - name: Build signed Android debug APK
-        run: flutter build apk --debug --flavor dev --target lib/main.dart --no-pub
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: spotube-originos6-test-apk
-          path: build/app/outputs/flutter-apk/app-dev-debug.apk
-          if-no-files-found: error
-          retention-days: 14
