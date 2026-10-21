@@ -48,7 +48,7 @@ jobs:
             lib/pages/settings/metadata/metadata_form.dart \
             lib/provider/audio_player/audio_player_streams.dart \
             lib/services/audio_services/mobile_audio_service.dart \
-            lib/services/audio_services/origin_island_bridge.dart \
+            lib/provider/metadata_plugin/browse/guest_discovery.dart \
             lib/services/audio_services/headset_click_sequence.dart
 
   android-debug:

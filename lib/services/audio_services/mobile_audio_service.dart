@@ -8,7 +8,6 @@ import 'package:spotube/provider/audio_player/audio_player.dart';
 import 'package:spotube/provider/audio_player/state.dart';
 import 'package:spotube/services/audio_player/audio_player.dart';
 import 'package:spotube/services/audio_player/playback_state.dart';
-import 'package:spotube/services/audio_services/origin_island_bridge.dart';
 import 'package:spotube/services/audio_services/headset_click_sequence.dart';
 import 'package:spotube/services/logger/logger.dart';
 import 'package:spotube/utils/platform.dart';
@@ -19,8 +18,6 @@ class MobileAudioService extends BaseAudioHandler {
 
   MediaItem? _activeMediaItem;
   DateTime? _lastPlaybackUpdate;
-  DateTime? _lastIslandUpdate;
-  bool _islandActive = false;
   late final HeadsetClickSequence _headsetClicks;
 
   // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
@@ -207,7 +204,6 @@ class MobileAudioService extends BaseAudioHandler {
   @override
   Future<void> onTaskRemoved() async {
     _headsetClicks.cancelPending();
-    await OriginIslandBridge.clear();
     await audioPlayer.pause();
     if (kIsAndroid) exit(0);
   }
@@ -220,51 +216,15 @@ class MobileAudioService extends BaseAudioHandler {
     if (!force &&
         _lastPlaybackUpdate != null &&
         now.difference(_lastPlaybackUpdate!) < const Duration(seconds: 1)) {
-      _updateOriginIsland();
       return;
     }
     _lastPlaybackUpdate = now;
 
     try {
       playbackState.add(_transformEvent(positionOverride: positionOverride));
-      _updateOriginIsland(force: force);
     } catch (e, stack) {
       AppLogger.reportError(e, stack);
     }
-  }
-
-  void _updateOriginIsland({bool force = false}) {
-    if (!kIsAndroid) return;
-
-    final item = _activeMediaItem;
-    // Only active playback is promoted; pausing keeps the standard
-    // MediaSession notification while removing the separate status chip.
-    if (item == null || !audioPlayer.hasSource || !audioPlayer.isPlaying) {
-      if (_islandActive) {
-        _islandActive = false;
-        unawaited(OriginIslandBridge.clear());
-      }
-      return;
-    }
-
-    final now = DateTime.now();
-    if (!force &&
-        _lastIslandUpdate != null &&
-        now.difference(_lastIslandUpdate!) < const Duration(seconds: 5)) {
-      return;
-    }
-
-    _lastIslandUpdate = now;
-    _islandActive = true;
-    unawaited(
-      OriginIslandBridge.update(
-        title: item.title,
-        artist: item.artist ?? '',
-        position: audioPlayer.position,
-        duration: item.duration ?? audioPlayer.duration,
-        playing: audioPlayer.isPlaying,
-      ),
-    );
   }
 
   PlaybackState _transformEvent({Duration? positionOverride}) {

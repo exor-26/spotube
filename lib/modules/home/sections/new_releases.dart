@@ -6,6 +6,7 @@ import 'package:spotube/extensions/context.dart';
 import 'package:spotube/models/metadata/metadata.dart';
 import 'package:spotube/provider/metadata_plugin/album/releases.dart';
 import 'package:spotube/provider/metadata_plugin/core/auth.dart';
+import 'package:spotube/provider/metadata_plugin/metadata_plugin_provider.dart';
 import 'package:spotube/provider/metadata_plugin/utils/common.dart';
 import 'package:spotube/services/metadata/errors/exceptions.dart';
 
@@ -16,9 +17,14 @@ class HomeNewReleasesSection extends HookConsumerWidget {
   Widget build(BuildContext context, ref) {
     final authenticated = ref.watch(metadataPluginAuthenticatedProvider);
 
-    // Home releases are already hidden when signed out. Don't request them
-    // in that state, as the bundled provider needs an account username.
-    if (authenticated.asData?.value != true) {
+    // Only the bundled ListenBrainz plugin requires an account for releases.
+    // Other metadata plugins may support anonymous release discovery.
+    final plugins = ref.watch(metadataPluginsProvider);
+    final isBundledListenBrainz =
+        plugins.asData?.value.defaultMetadataPluginConfig?.repository ==
+            "https://github.com/KRTirtho/spotube-plugin-musicbrainz-listenbrainz";
+
+    if (isBundledListenBrainz && authenticated.asData?.value != true) {
       return const SizedBox.shrink();
     }
 
