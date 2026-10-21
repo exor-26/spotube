@@ -85,6 +85,10 @@ jobs:
               exclude group: 'com.android.support', module: 'support-compat'
           }
           GRADLE
+          # Upstream still points to the nonexistent com.android.support
+          # multidex 2.0.1 coordinate. Use the maintained AndroidX artifact
+          # for this CI test build, leaving the real source file untouched.
+          sed -i 's/com.android.support:multidex:2.0.1/androidx.multidex:multidex:2.0.1/g' android/app/build.gradle
           flutter build apk --debug --flavor dev --target lib/main.dart --no-pub --target-platform android-arm64
       - name: Verify APK signature and dev package ID
         run: |
