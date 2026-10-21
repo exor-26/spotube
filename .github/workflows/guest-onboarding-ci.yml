@@ -1,4 +1,4 @@
-name: Branch validation (no APK builds)
+name: Branch validation and signed Android test APK
 
 on:
   push:
@@ -51,3 +51,50 @@ jobs:
             lib/services/audio_services/origin_island_bridge.dart \
             lib/services/audio_services/headset_click_sequence.dart
 
+  android-debug:
+    name: Build and verify signed Android dev APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Create non-secret development configuration
+        run: |
+          printf 'ENABLE_UPDATE_CHECK=0\nLASTFM_API_KEY=xxx\nLASTFM_API_SECRET=xxx\nRELEASE_CHANNEL=nightly\nHIDE_DONATIONS=1\n' > .env
+      - name: Prepare temporary Android dev signing
+        run: |
+          keytool -genkeypair -noprompt -keystore android/app/spotube-ci-test.jks \
+            -alias spotube-ci-test -keyalg RSA -keysize 2048 -validity 365 \
+            -storepass android-ci-test -keypass android-ci-test \
+            -dname 'CN=Spotube Dev Test,O=Development,C=IN'
+          printf 'storePassword=android-ci-test\nkeyPassword=android-ci-test\nkeyAlias=spotube-ci-test\nstoreFile=spotube-ci-test.jks\n' > android/key.properties
+      - name: Install Flutter packages
+        run: flutter pub get
+      - name: Generate Dart code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build signed Android dev debug APK
+        run: flutter build apk --debug --flavor dev --target lib/main.dart --no-pub
+      - name: Verify APK signature and dev package ID
+        run: |
+          APK=build/app/outputs/flutter-apk/app-dev-debug.apk
+          test -s "$APK"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          "$AAPT" dump badging "$APK" | grep -F "name='oss.krtirtho.spotube.dev'"
+          sha256sum "$APK"
+      - name: Upload signed dev APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotube-android16-originos6-signed-dev-apk
+          path: build/app/outputs/flutter-apk/app-dev-debug.apk
+          if-no-files-found: error
+          retention-days: 14
