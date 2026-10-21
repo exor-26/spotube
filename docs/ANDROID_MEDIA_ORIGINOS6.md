@@ -1,85 +1,81 @@
-# Spotube Android 16 / Vivo OriginOS 6 media integration
+# Spotube Android 16 / Vivo OriginOS 6: media and guest Home
 
-This experimental branch is for development **without APK builds or PRs**.
+## Notification player (single source of truth)
 
-## 1. Android media notification seekbar (independent)
+Spotube uses exactly one native Android music notification from
+`audio_service` / `MediaSession`. It retains artwork, current song metadata,
+play/pause, previous/next, seekbar, and lock-screen/headset controls.
 
-Spotube still uses `audio_service` and Android MediaSession for its media
-notification, seekbar, notification play/pause/next/previous and lock-screen
-controls. The implementation corrects asynchronous MediaItem initialization,
-refreshes metadata duration from the player, publishes requested seek
-positions, and throttles overly frequent playback-state updates.
+Notification seekbar fixes preserve the active MediaItem even when the
+notification service starts asynchronously, keep duration synchronized with
+MediaKit, and send explicit seek position updates. We do not post a separate
+music progress notification.
 
-MediaSession controls must continue to work even if the Origin Island feature
-is unavailable. Network sources must independently support byte-range seek.
+## Origin Island: findings and limitations
 
-## 2. Headset gestures on locked and unlocked screens
+Spotify-style compact camera-cutout music UI is rendered by Vivo OriginOS:
+album cover at left, animated rhythm at right, and an expanded music surface.
+The device, not Spotube's Flutter UI, controls the actual animation, sizing,
+expansion gestures, and artwork-derived color palette.
 
-AudioService routes media-button events from the headset / Bluetooth
-controls to `MobileAudioService.click()`:
-- A single generic media-button tap toggles play/pause after a 380 ms window.
-- Two quick taps select the next track.
-- Three quick taps select the previous track.
-- Headphones that emit distinct NEXT / PREVIOUS key codes skip immediately,
-  without grouping or delay.
-- Queued generic taps are cleared when an explicit Next/Previous event arrives.
+Our previous `OriginIslandNotifier` used Android 16 promoted
+`Notification.ProgressStyle`, suitable for CardBox live booking updates but
+**not** a native Spotify-style music island. It created a duplicate ordinary
+notification in the shade. That second notification and its platform bridge
+were removed in this change.
 
-Tests of click grouping live in
-`test/services/audio_services/headset_click_sequence_test.dart`.
+Spotube continues supplying song metadata and artwork through Android's
+MediaSession; this allows OriginOS native music handling *if the device
+supports Spotube*. Some OriginOS versions whitelist which third-party music
+players can populate the Island. Public SDKs do not guarantee that a given
+third-party app can reproduce Spotify's dynamic music pill.
 
-This depends on Android delivering headset media keys to the active Spotube
-MediaSession. Earbuds that consume taps in proprietary firmware or assistant
-gestures may never emit those key events. Verify while the screen is locked.
+No notification listener permission, overlay window, package spoofing or
+undocumented API is added. Any future independent Island implementation
+must be tested on the specific Vivo T4 Ultra firmware and must not add a
+second visible notification.
 
-## 3. Origin Island: native Vivo status chip, not playback seekbar
+References:
+- https://www.vivo.com/en/originos.
+- https://github.com/Moriafly/SaltPlayerSource/issues/1941
+- https://github.com/cameleonnbss/originos-toolkit/blob/main/docs/ORIGINISLAND.md
 
-The implementation follows the **working CardBox reference**:
-`exor-26/CardBox/mobile/android/app/src/main/java/com/starwebx/cardbox/CardboxLiveUpdateManager.kt`.
+## Guest Home: real public albums and playlists
 
-- Uses Android 16's `Notification.ProgressStyle` and
-  `android.requestPromotedOngoing`, not the unverified SuperX-only payload.
-- Posts only on Vivo/iQOO devices with API level 36 or higher, and only while
-  music is actually playing.
-- Shows song title, artist, track progress and a compact remaining-time label.
-- Adds media actions routed to the existing `audio_service` MediaButtonReceiver.
-- Cancels the separate notification on pause, stop, or cleared track.
-- Requires `POST_NOTIFICATIONS` and declares
-  `POST_PROMOTED_NOTIFICATIONS` like CardBox.
-- Does not post a duplicate ordinary notification when the system reports
-  that promotion is not available.
-- Keeps the **standard MediaStyle notification and seekbar** independent.
+For the **bundled MusicBrainz/ListenBrainz metadata provider only**:
 
-Unlike the CardBox booking/live travel case, a music status may face additional
-OriginOS eligibility or music-player whitelist rules; identical Spotify
-rendering is **not guaranteed**. The standard MediaSession may already be
-integrated by compatible OriginOS builds.
+- Signed in: keep original personalized radio, mood, created-for playlists,
+  and account-specific fresh releases from the plugin unchanged.
+- Guest: use public ListenBrainz `/1/explore/fresh-releases/` for album cards
+  and public `/1/playlist/search?query=music` for playlist cards.
+- Fetch albums and playlists separately, so slow public playlist searches
+  do not prevent new albums from rendering.
+- No fake user, credentials, or private API calls are involved.
+- For other metadata plugins, keep their own anonymous browsing and release
+  support intact instead of suppressing them solely because auth=false.
+- Existing search and recently played remain available when offline.
+- Public discovery is not a replacement for personal recommendations and
+  may be incomplete if ListenBrainz public endpoints are offline or slow.
 
-Android reference:
-https://developer.android.com/develop/ui/views/notifications/live-update
-Music-player whitelist discussion:
-https://github.com/Moriafly/SaltPlayerSource/issues/1941
+The two public source APIs are documented in ListenBrainz:
+https://listenbrainz.readthedocs.io/en/latest/users/api/misc.html
+https://listenbrainz.readthedocs.io/en/latest/users/api/playlist.html
 
-## Test checklist for Vivo T4 Ultra, OriginOS 6 (later — no build yet)
+## Verify on Vivo T4 Ultra
 
-1. Start track while unlocked; grant notifications if prompted.
-2. Inspect standard notification: artwork, exact duration and seekbar.
-3. Seek to 25%, 50%, and 75% with screen unlocked and locked.
-4. Test wired/Bluetooth headset single/double/triple tap in background and
-   with screen locked; compare headphones that provide explicit media keys.
-5. Check Origin Island while playing, after pausing, on next/previous and
-   after stopping; verify no second ordinary shade notification.
-6. Tap Island notification to open Spotube, and use previous/pause/next
-   actions if shown by the ROM.
-7. If the status chip is missing, inspect
-   `adb logcat -s SpotubeOriginIsland` for the eligibility results and
-   check Vivo's Live Updates / Origin Island app permissions.
-8. Inspect `adb shell dumpsys media_session` for seek permission,
-   metadata duration, state and headset control events.
-9. Compare with CardBox live update on the same OS build.
-10. Verify non-Vivo Android receives only the standard MediaSession.
+1. Confirm exactly **one** music notification in the Android shade.
+2. Seek forward/backward on shade media progress; lock and unlock screen.
+3. Check wired/Bluetooth earphone single/double/triple presses while locked.
+4. Watch whether OriginOS naturally recognizes Spotube's MediaSession at the
+   camera cutout; compare Spotify on the same ROM. No custom Island overlay or
+   second notification is intended.
+5. Start Home as guest; confirm New Releases and Playlists cards load on
+   public network. Note that public playlist search may take tens of seconds.
+6. Open and play a release and playlist to ensure the bundled metadata
+   plugin retrieves the items correctly.
+7. Log in to ListenBrainz; verify original personalized home restores.
+8. Switch metadata plugins; verify their supported anonymous sections still
+   work and audio-source plugin selections remain unchanged.
 
-## Validation limits
-
-GitHub Actions validates Dart code and headset-sequence unit tests, without
-building an APK. Android Kotlin compilation and actual OriginOS rendering
-cannot be certified until the user authorizes an Android build/device test.
+Static Dart validation and signed APK compilation do not prove Vivo OEM Island
+eligibility or public API availability; both require runtime/device testing.

@@ -89,7 +89,7 @@ Future<List<SpotubeSimplePlaylistObject>> fetchGuestPublicPlaylists() async {
       'query': 'music',
       'count': '15',
     }),
-    options: Options(receiveTimeout: const Duration(seconds: 18)),
+    options: Options(receiveTimeout: const Duration(seconds: 55)),
   );
   final body = response.data;
   if (body is! Map || body['playlists'] is! List) return [];
@@ -113,7 +113,8 @@ Future<List<SpotubeSimplePlaylistObject>> fetchGuestPublicPlaylists() async {
       owner: SpotubeUserObject(
         id: username,
         name: username,
-        externalUri: 'https://listenbrainz.org/user/${Uri.encodeComponent(username)}',
+        externalUri:
+            'https://listenbrainz.org/user/${Uri.encodeComponent(username)}',
       ),
       images: image is String && image.startsWith('https://')
           ? [SpotubeImageObject(url: image)]
@@ -160,9 +161,7 @@ class GuestDiscoverySections extends ConsumerWidget {
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             ),
-          if (!loading &&
-              freshAlbums.isEmpty &&
-              publicPlaylists.isEmpty)
+          if (!loading && freshAlbums.isEmpty && publicPlaylists.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
               child: Text(context.l10n.search_to_get_results),

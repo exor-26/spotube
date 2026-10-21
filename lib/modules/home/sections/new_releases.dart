@@ -20,9 +20,9 @@ class HomeNewReleasesSection extends HookConsumerWidget {
     // Only the bundled ListenBrainz plugin requires an account for releases.
     // Other metadata plugins may support anonymous release discovery.
     final plugins = ref.watch(metadataPluginsProvider);
-    final isBundledListenBrainz =
-        plugins.asData?.value.defaultMetadataPluginConfig?.repository ==
-            "https://github.com/KRTirtho/spotube-plugin-musicbrainz-listenbrainz";
+    final isBundledListenBrainz = plugins
+            .asData?.value.defaultMetadataPluginConfig?.repository ==
+        "https://github.com/KRTirtho/spotube-plugin-musicbrainz-listenbrainz";
 
     if (isBundledListenBrainz && authenticated.asData?.value != true) {
       return const SizedBox.shrink();

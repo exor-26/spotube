@@ -40,7 +40,7 @@ jobs:
         run: flutter test test/services/audio_services/headset_click_sequence_test.dart
       - name: Check formatting of changed Dart files
         run: |
-          dart format --output=write \
+          dart format --output=none --set-exit-if-changed \
             lib/collections/routes.dart \
             lib/pages/home/home.dart \
             lib/modules/home/sections/sections.dart \
@@ -50,8 +50,6 @@ jobs:
             lib/services/audio_services/mobile_audio_service.dart \
             lib/provider/metadata_plugin/browse/guest_discovery.dart \
             lib/services/audio_services/headset_click_sequence.dart
-          git diff -- lib/modules/home/sections/new_releases.dart lib/provider/metadata_plugin/browse/guest_discovery.dart
-          git diff --quiet -- lib/modules/home/sections/new_releases.dart lib/provider/metadata_plugin/browse/guest_discovery.dart
 
   android-debug:
     name: Build and verify signed Android dev APK
