@@ -126,7 +126,7 @@ dependencies {
 
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1'
     // other deps so just ignore
-    implementation 'com.android.support:multidex:2.0.1'
+    implementation 'androidx.multidex:multidex:2.0.1'
 
     implementation "androidx.glance:glance-appwidget:$glanceVersion"
     implementation "androidx.glance:glance-appwidget-preview:$glanceVersion"
