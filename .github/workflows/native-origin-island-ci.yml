@@ -1,0 +1,106 @@
+name: Original Spotube seekbar and collapsed Origin Island
+
+on:
+  push:
+    branches:
+      - fix/native-origin-island-seekbar
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spotube-native-origin-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.35.2'
+
+jobs:
+  analyze:
+    name: Generate code and analyze Dart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Create non-secret development configuration
+        run: |
+          printf 'ENABLE_UPDATE_CHECK=0\nLASTFM_API_KEY=xxx\nLASTFM_API_SECRET=xxx\nRELEASE_CHANNEL=nightly\nHIDE_DONATIONS=1\n' > .env
+      - name: Install packages
+        run: flutter pub get
+      - name: Generate code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze Dart
+        run: dart analyze --no-fatal-warnings
+      - name: Check formatting of changed Dart files
+        run: |
+          dart format --output=none --set-exit-if-changed \
+            lib/provider/audio_player/audio_player_streams.dart \
+            lib/services/audio_services/mobile_audio_service.dart \
+            lib/services/audio_services/native_island.dart
+
+  android-debug:
+    name: Build and verify signed Android dev APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Create non-secret development configuration
+        run: |
+          printf 'ENABLE_UPDATE_CHECK=0\nLASTFM_API_KEY=xxx\nLASTFM_API_SECRET=xxx\nRELEASE_CHANNEL=nightly\nHIDE_DONATIONS=1\n' > .env
+      - name: Prepare temporary Android dev signing
+        run: |
+          keytool -genkeypair -noprompt -keystore android/app/spotube-ci-test.jks \
+            -alias spotube-ci-test -keyalg RSA -keysize 2048 -validity 365 \
+            -storepass android-ci-test -keypass android-ci-test \
+            -dname 'CN=Spotube Dev Test,O=Development,C=IN'
+          printf 'storePassword=android-ci-test\nkeyPassword=android-ci-test\nkeyAlias=spotube-ci-test\nstoreFile=spotube-ci-test.jks\n' > android/key.properties
+      - name: Install Flutter packages
+        run: flutter pub get
+      - name: Generate Dart code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build signed Android dev debug APK
+        run: |
+          # All required app/plugins already use AndroidX. Jetifier needlessly
+          # rewrites a very large Flutter engine JAR and exhausts CI heap.
+          # Keep this CI-only; do not change the checked-in Gradle settings.
+          printf '\nandroid.enableJetifier=false\n' >> android/gradle.properties
+          # One old dependency brings support-compat 27.0.1, which duplicates
+          # AndroidX Core classes when Jetifier is disabled for CI.
+          printf '\n' >> android/app/build.gradle
+          cat >> android/app/build.gradle <<'GRADLE'
+          configurations.configureEach {
+              exclude group: 'com.android.support', module: 'support-compat'
+          }
+          GRADLE
+          flutter build apk --debug --flavor dev --target lib/main.dart --no-pub --target-platform android-arm64
+      - name: Verify APK signature and dev package ID
+        run: |
+          APK=build/app/outputs/flutter-apk/app-dev-debug.apk
+          test -s "$APK"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          "$AAPT" dump badging "$APK" | grep -F "name='oss.krtirtho.spotube.dev'"
+          sha256sum "$APK"
+      - name: Upload signed dev APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotube-original-native-island-seekbar-dev-apk
+          path: build/app/outputs/flutter-apk/app-dev-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
