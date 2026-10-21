@@ -99,6 +99,10 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs "$APK"
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
           "$AAPT" dump badging "$APK" | grep -F "name='oss.krtirtho.spotube.dev'"
+          # Check the resolved class in the packaged APK, not just the XML
+          # source. A relative activity name can resolve against the .dev
+          # application ID instead of the original Kotlin namespace.
+          "$AAPT" dump badging "$APK" | grep -F "launchable-activity: name='oss.krtirtho.spotube.MainActivity'"
           sha256sum "$APK"
       - name: Upload signed dev APK
         uses: actions/upload-artifact@v4
