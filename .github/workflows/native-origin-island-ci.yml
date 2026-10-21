@@ -89,7 +89,7 @@ jobs:
           # multidex 2.0.1 coordinate. Use the maintained AndroidX artifact
           # for this CI test build, leaving the real source file untouched.
           sed -i 's/com.android.support:multidex:2.0.1/androidx.multidex:multidex:2.0.1/g' android/app/build.gradle
-          flutter build apk --debug --flavor dev --target lib/main.dart --no-pub --target-platform android-arm64
+          flutter build apk --debug --flavor dev --target lib/main.dart --no-pub --target-platform android-arm64,android-x64
       - name: Verify APK signature and dev package ID
         run: |
           APK=build/app/outputs/flutter-apk/app-dev-debug.apk
@@ -104,6 +104,40 @@ jobs:
           # application ID instead of the original Kotlin namespace.
           "$AAPT" dump badging "$APK" | grep -F "launchable-activity: name='oss.krtirtho.spotube.MainActivity'"
           sha256sum "$APK"
+      - name: Enable KVM for Android startup smoke test
+        run: |
+          sudo sh -c 'echo KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' > /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch original onboarding in Android 16 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            set -e
+            APK=build/app/outputs/flutter-apk/app-dev-debug.apk
+            adb install -r "$APK"
+            adb logcat -c
+            # Original app ID plus upstream dev suffix; Kotlin activity remains
+            # in original unsuffixed oss.krtirtho.spotube namespace.
+            adb shell am start -W -n oss.krtirtho.spotube.dev/oss.krtirtho.spotube.MainActivity
+            sleep 25
+            if ! adb shell pidof oss.krtirtho.spotube.dev; then
+              echo "App process exited during startup:"
+              adb logcat -d -b crash | tail -n 150
+              exit 1
+            fi
+            if adb logcat -d -b crash | grep -A 5 -E "Process: oss.krtirtho.spotube.dev|FATAL EXCEPTION"; then
+              echo "Fatal Android crash detected during startup"
+              adb logcat -d -b crash | tail -n 150
+              exit 1
+            fi
+            echo "Original Spotube launcher survived the startup smoke test"
       - name: Upload signed dev APK
         uses: actions/upload-artifact@v4
         with:
