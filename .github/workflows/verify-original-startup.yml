@@ -1,0 +1,43 @@
+name: Smoke test signed original Spotube APK startup
+
+on:
+  push:
+    branches:
+      - ci/native-island-startup-smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  emulator-startup:
+    name: Android 16 app launch smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download prebuilt signed APK from validated feature run
+        uses: actions/download-artifact@v4
+        with:
+          name: spotube-original-native-island-seekbar-dev-apk
+          run-id: 39598450619
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: exor-26/spotube
+          path: build/app/outputs/flutter-apk
+      - name: Confirm exact existing APK
+        run: test -s build/app/outputs/flutter-apk/app-dev-debug.apk
+      - name: Enable KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install and launch original Spotube onboarding (Android 16)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          script: bash scripts/ci/android_startup_smoke.sh
