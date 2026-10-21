@@ -176,7 +176,6 @@ class OriginIslandNotifier(private val activity: Activity) {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .setSilent(true)
                 .setColor(Color.rgb(93, 88, 215))
                 .setStyle(style)
                 .setShortCriticalText(timeLabel.take(7))
