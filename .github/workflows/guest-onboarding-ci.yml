@@ -87,6 +87,7 @@ jobs:
           printf '\nandroid.enableJetifier=false\n' >> android/gradle.properties
           # One old dependency brings support-compat 27.0.1, which duplicates
           # AndroidX Core classes when Jetifier is disabled for CI.
+          printf '\n' >> android/app/build.gradle
           cat >> android/app/build.gradle <<'GRADLE'
           configurations.configureEach {
               exclude group: 'com.android.support', module: 'support-compat'
